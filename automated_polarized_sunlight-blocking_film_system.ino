@@ -6,15 +6,16 @@
 // TB6600 pins
 #define DIR_PIN 2
 #define STEP_PIN 3
+#define ENA_PIN 4
 
 // Motor settings
 const int STEPS_PER_REV = 200;
-const int MICROSTEPPING = 16;
+const int MICROSTEPPING = 32;
 int motorRPM = 60;
 
 // Segment settings
 const int NUM_SEGMENTS = 8;
-const int DEGREES_PER_SEGMENT = 3600;
+const int DEGREES_PER_SEGMENT = 360;
 
 int currentSegment = 0;
 
@@ -38,6 +39,8 @@ void stepMotor(long steps) {
   if (steps == 0)
     return;
 
+  digitalWrite(ENA_PIN, LOW);
+
   // half-period delay derived from RPM
   long stepsPerSec = ((long)STEPS_PER_REV * MICROSTEPPING * motorRPM) / 60;
   int halfPeriodUs = max(1L, 500000L / stepsPerSec);
@@ -51,6 +54,9 @@ void stepMotor(long steps) {
     digitalWrite(STEP_PIN, LOW);
     delayMicroseconds(halfPeriodUs);
   }
+
+  delay(5);
+  digitalWrite(ENA_PIN, HIGH);
 }
 
 // Move to an absolute segment (0..NUM_SEGMENTS). Returns degrees rotated.
@@ -92,6 +98,9 @@ void setup() {
 
   pinMode(STEP_PIN, OUTPUT);
   pinMode(DIR_PIN, OUTPUT);
+  pinMode(ENA_PIN, OUTPUT);
+  digitalWrite(ENA_PIN, HIGH);
+
 
   // Read last saved segment from EEPROM
   currentSegment = EEPROM.read(0);
