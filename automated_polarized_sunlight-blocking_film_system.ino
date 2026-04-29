@@ -1,7 +1,7 @@
 #include <Stepper.h>
 
 const int stepsPerRevolution = 2048;
-Stepper stepper(stepsPerRevolution, 52, 51, 53, 50);
+Stepper stepper(stepsPerRevolution, 8, 10, 9 ,11);
 
 const int lightPin = A0;
 
