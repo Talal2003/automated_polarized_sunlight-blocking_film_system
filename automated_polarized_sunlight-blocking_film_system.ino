@@ -1,83 +1,126 @@
 #include <Wire.h>
 #include <BH1750.h>
 
-// TB6600 Pins
-#define STEP_PIN 2
-#define DIR_PIN 3
+// TB6600 pins
+#define DIR_PIN 2
+#define STEP_PIN 3
 
 // Motor settings
-const int stepsPerRevolution = 200;
-int microstepping = 32;
+const int STEPS_PER_REV = 200;
+const int MICROSTEPPING = 32;
+int motorRPM = 60;
 
-// BH1750 setup
-BH1750 lightMeter1(0x23);  // first sensor
-BH1750 lightMeter2(0x5C);  // second sensor
+// Segment settings
+const int NUM_SEGMENTS = 10;
+const int DEGREES_PER_SEGMENT = 360;
 
-// Segments
-const int segments[] = { 0, 45, 90, 135, 180, 225, 270, 315, 360 };
-const int numSegments = sizeof(segments) / sizeof(segments[0]);
 int currentSegment = 0;
 
-long degreesToSteps(int degrees) {
-  return (long)degrees * (stepsPerRevolution * microstepping) / 360;
+// Light sensors
+BH1750 lightMeter1(0x23);
+BH1750 lightMeter2(0x5C);
+
+int updateFrequencyMs = 1000; // Update every 1 second
+// Convert degrees to microsteps
+long degreesToSteps(long degrees)
+{
+    return degrees * ((long)STEPS_PER_REV * MICROSTEPPING) / 360;
 }
 
-void stepMotor(long steps) {
-  if (steps == 0) return;
+// Step the motor by a signed number of microsteps
+void stepMotor(long steps)
+{
+    if (steps == 0)
+        return;
 
-  digitalWrite(DIR_PIN, steps > 0 ? HIGH : LOW);
-  steps = abs(steps);
+    // half-period delay derived from RPM
+    long stepsPerSec = ((long)STEPS_PER_REV * MICROSTEPPING * motorRPM) / 60;
+    int halfPeriodUs = max(1L, 500000L / stepsPerSec);
 
-  for (long i = 0; i < steps; i++) {
-    digitalWrite(STEP_PIN, HIGH);
-    delayMicroseconds(300);
-    digitalWrite(STEP_PIN, LOW);
-    delayMicroseconds(300);
-  }
+    digitalWrite(DIR_PIN, steps > 0 ? HIGH : LOW);
+    steps = abs(steps);
+
+    for (long i = 0; i < steps; i++)
+    {
+        digitalWrite(STEP_PIN, HIGH);
+        delayMicroseconds(halfPeriodUs);
+        digitalWrite(STEP_PIN, LOW);
+        delayMicroseconds(halfPeriodUs);
+    }
 }
 
-void setup() {
-  Serial.begin(9600);
-  Wire.begin();
+// Move to an absolute segment (0..NUM_SEGMENTS). Returns degrees rotated.
+int moveToSegment(int targetSegment)
+{
+    targetSegment = constrain(targetSegment, 0, NUM_SEGMENTS);
 
-  pinMode(STEP_PIN, OUTPUT);
-  pinMode(DIR_PIN, OUTPUT);
+    if (targetSegment == currentSegment)
+        return 0;
 
-  if (!lightMeter1.begin(BH1750::CONTINUOUS_HIGH_RES_MODE, 0x23)) {
-    Serial.println("Error initializing BH1750 #1");
-  }
-
-  if (!lightMeter2.begin(BH1750::CONTINUOUS_HIGH_RES_MODE, 0x5C)) {
-    Serial.println("Error initializing BH1750 #2");
-  }
-}
-
-void loop() {
-  float lux1 = lightMeter1.readLightLevel();
-  float lux2 = lightMeter2.readLightLevel();
-
-  Serial.print("Light sensor 1: ");
-  Serial.println(lux1);
-  Serial.print("Light sensor 2: ");
-  Serial.println(lux2);
-
-  float lux = (lux1 + lux2) / 2;
-
-  int targetSegment = map(lux, 0, 1000, 0, numSegments - 1);
-  targetSegment = constrain(targetSegment, 0, numSegments - 1);
-
-  if (targetSegment != currentSegment) {
-    int rotation = segments[targetSegment] - segments[currentSegment];
-    long steps = degreesToSteps(rotation);
-
-    stepMotor(steps);
-
-    Serial.print("Rotated: ");
-    Serial.print(rotation);
-    Serial.println(" degrees");
-
+    int deltaDeg = (targetSegment - currentSegment) * DEGREES_PER_SEGMENT;
+    stepMotor(degreesToSteps(deltaDeg));
     currentSegment = targetSegment;
-  }
+    return deltaDeg;
+}
 
-  delay(1000);
+// Move by a relative number of segments. Returns degrees rotated.
+int moveBySegments(int segmentDelta)
+{
+    return moveToSegment(currentSegment + segmentDelta);
+}
+
+// Rotate by arbitrary degrees without updating segment tracking
+// (might use for minor adjustments in future)
+void moveDegrees(int degrees)
+{
+    stepMotor(degreesToSteps(degrees));
+}
+
+int getCurrentSegment()
+{
+    return currentSegment;
+}
+
+void setup()
+{
+    Serial.begin(9600);
+    Wire.begin();
+
+    pinMode(STEP_PIN, OUTPUT);
+    pinMode(DIR_PIN, OUTPUT);
+
+    if (!lightMeter1.begin(BH1750::CONTINUOUS_HIGH_RES_MODE, 0x23))
+        Serial.println(F("Error initializing BH1750 #1"));
+
+    if (!lightMeter2.begin(BH1750::CONTINUOUS_HIGH_RES_MODE, 0x5C))
+        Serial.println(F("Error initializing BH1750 #2"));
+}
+
+void loop()
+{
+    float lux1 = lightMeter1.readLightLevel();
+    float lux2 = lightMeter2.readLightLevel();
+
+    Serial.print(F("Light sensor 1: "));
+    Serial.println(lux1);
+    Serial.print(F("Light sensor 2: "));
+    Serial.println(lux2);
+
+    float lux = (lux1 + lux2) / 2.0f;
+
+    int targetSegment = map((long)lux, 0, 4000, 0, NUM_SEGMENTS);
+    targetSegment = constrain(targetSegment, 0, NUM_SEGMENTS);
+
+    int rotated = moveToSegment(targetSegment);
+
+    if (rotated != 0)
+    {
+        Serial.print(F("Moved to segment "));
+        Serial.print(currentSegment);
+        Serial.print(F(" (rotated "));
+        Serial.print(rotated);
+        Serial.println(F(" deg)"));
+    }
+
+    delay(updateFrequencyMs);
 }
