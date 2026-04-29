@@ -1,24 +1,28 @@
-// Include the Arduino stepper library
-#include <Stepper.h>
+#include <AccelStepper.h>
 
-// Steps for one full revolution
-const int stepsPerRevolution = 2048;
+#define MotorInterfaceType AccelStepper::HALF4WIRE
 
-// Steps for 90 degrees (1/4 turn)
-const int stepsPerQuarterTurn = stepsPerRevolution / 4;
-
-// Use pin 50–53 to IN1–IN4
-Stepper stepperName(stepsPerRevolution, 52, 53, 51, 50);
+// Pins IN1, IN3, IN2, IN4
+AccelStepper stepper(MotorInterfaceType, 52, 51, 53, 50);
 
 void setup() {
-  // Set the RPM of the stepper motor
-  stepperName.setSpeed(10);
+  stepper.setMaxSpeed(800);
+  stepper.setAcceleration(400);
 }
 
 void loop() {
-  // Rotate 90 degrees
-  stepperName.step(stepsPerQuarterTurn);
+  // 90° clockwise
+  stepper.move(2048);
+  stepper.runToPosition();
 
-  // Pause for 1 second
-  delay(1000);
+
+  // 180° counter-clockwise
+  stepper.move(-2048);
+  stepper.runToPosition();
+
+
+  // 90° clockwise (back to start)
+  stepper.move(2048);
+  stepper.runToPosition();
+
 }
