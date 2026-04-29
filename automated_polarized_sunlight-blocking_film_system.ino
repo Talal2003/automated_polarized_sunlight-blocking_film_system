@@ -14,8 +14,8 @@ const int MICROSTEPPING = 32;
 int motorRPM = 60;
 
 // Segment settings
-const int NUM_SEGMENTS = 8;
-const int DEGREES_PER_SEGMENT = 1200;
+const int NUM_SEGMENTS = 6;
+const int DEGREES_PER_SEGMENT = 2450;
 
 int currentSegment = 0;
 
@@ -100,6 +100,7 @@ int moveBySegments(int segmentDelta) {
 }
 
 // Rotate by arbitrary degrees without updating segment tracking
+// (might use for minor adjustments in future)
 void moveDegrees(int degrees) {
   stepMotor(degreesToSteps(degrees));
 }
@@ -152,10 +153,24 @@ void checkBluetooth() {
       BTSerial.println("RESET DONE");
 
     } else if (cmd.equalsIgnoreCase("KILL")) {
-      killMotor = true;
-      digitalWrite(ENA_PIN, HIGH);  // immediately disable driver
-      Serial.println("Motor killed!");
-      BTSerial.println("MOTOR STOPPED");
+          killMotor = true;
+          digitalWrite(ENA_PIN, HIGH);  // immediately disable driver
+          Serial.println("Motor killed!");
+          BTSerial.println("MOTOR STOPPED");
+          
+        } else if (cmd.equalsIgnoreCase("UP")) {
+      if (!isAutoMode) {
+        moveDegrees(-250);
+        Serial.println("Moved UP (250 deg)");
+        BTSerial.println("UP DONE");
+      }
+
+    } else if (cmd.equalsIgnoreCase("DOWN")) {
+      if (!isAutoMode) {
+        moveDegrees(250);
+        Serial.println("Moved DOWN (250 deg)");
+        BTSerial.println("DOWN DONE");
+      }
       
     } else {
       int seg = cmd.toInt();
