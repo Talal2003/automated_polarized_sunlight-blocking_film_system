@@ -15,7 +15,7 @@ int motorRPM = 60;
 
 // Segment settings
 const int NUM_SEGMENTS = 8;
-const int DEGREES_PER_SEGMENT = 360;
+const int DEGREES_PER_SEGMENT = 1200;
 
 int currentSegment = 0;
 
@@ -29,6 +29,8 @@ int updateFrequencyMs = 1000;  // Update every 1 second
 SoftwareSerial BTSerial(10, 11);
 bool isAutoMode = true;
 
+bool killMotor = false;
+
 // Convert degrees to microsteps
 long degreesToSteps(long degrees) {
   return degrees * ((long)STEPS_PER_REV * MICROSTEPPING) / 360;
@@ -41,25 +43,41 @@ void stepMotor(long steps) {
 
   digitalWrite(ENA_PIN, LOW);
 
-  // half-period delay derived from RPM
   long stepsPerSec = ((long)STEPS_PER_REV * MICROSTEPPING * motorRPM) / 60;
   int halfPeriodUs = max(1L, 500000L / stepsPerSec);
 
   digitalWrite(DIR_PIN, steps > 0 ? HIGH : LOW);
   steps = abs(steps);
 
+  killMotor = false;  // reset before movement
+
   for (long i = 0; i < steps; i++) {
+
+    // Check for kill command during motion
+    if (BTSerial.available()) {
+      String cmd = BTSerial.readStringUntil('\n');
+      cmd.trim();
+      if (cmd.equalsIgnoreCase("KILL")) {
+        killMotor = true;
+        Serial.println("KILL command received!");
+        BTSerial.println("MOTOR STOPPED");
+      }
+    }
+
+    if (killMotor) {
+      break;
+    }
+
     digitalWrite(STEP_PIN, HIGH);
     delayMicroseconds(halfPeriodUs);
     digitalWrite(STEP_PIN, LOW);
     delayMicroseconds(halfPeriodUs);
   }
 
-  delay(5);
-  digitalWrite(ENA_PIN, HIGH);
+  digitalWrite(ENA_PIN, HIGH);  // disable motor
 }
 
-// Move to an absolute segment (0..NUM_SEGMENTS). Returns degrees rotated.
+// Move to an absolute segment. Returns degrees rotated.
 int moveToSegment(int targetSegment) {
   targetSegment = constrain(targetSegment, 0, NUM_SEGMENTS);
 
@@ -82,7 +100,6 @@ int moveBySegments(int segmentDelta) {
 }
 
 // Rotate by arbitrary degrees without updating segment tracking
-// (might use for minor adjustments in future)
 void moveDegrees(int degrees) {
   stepMotor(degreesToSteps(degrees));
 }
@@ -117,12 +134,29 @@ void checkBluetooth() {
   if (BTSerial.available()) {
     String cmd = BTSerial.readStringUntil('\n');
     cmd.trim();
+
     if (cmd.equalsIgnoreCase("AUTO")) {
       isAutoMode = true;
       Serial.println("Switched to AUTO mode");
+
     } else if (cmd.equalsIgnoreCase("MANUAL")) {
       isAutoMode = false;
       Serial.println("Switched to MANUAL mode");
+
+    } else if (cmd.equalsIgnoreCase("RESET")) {
+      // Clear EEPROM and reset segment tracking
+      EEPROM.update(0, 0);
+      currentSegment = 0;
+
+      Serial.println("EEPROM reset. Segment set to 0.");
+      BTSerial.println("RESET DONE");
+
+    } else if (cmd.equalsIgnoreCase("KILL")) {
+      killMotor = true;
+      digitalWrite(ENA_PIN, HIGH);  // immediately disable driver
+      Serial.println("Motor killed!");
+      BTSerial.println("MOTOR STOPPED");
+      
     } else {
       int seg = cmd.toInt();
       if (!isAutoMode && seg >= 0 && seg <= NUM_SEGMENTS) {
