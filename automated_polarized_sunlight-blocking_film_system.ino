@@ -1,29 +1,35 @@
 #include <Stepper.h>
 
-// Steps per full revolution
+int buttonPressPin = 38;
+
+bool buttonPressed;
+
+// Set how many steps it takes to make a full revolution. Divide the degrees per step by 360 to get the steps
 const int stepsPerRevolution = 2048;
 
-// Step amounts
-const int steps90  = stepsPerRevolution / 4;  // 90 degrees
-const int steps180 = stepsPerRevolution / 2; // 180 degrees
-
-// ULN2003 pins: IN1, IN3, IN2, IN4
-Stepper stepper(stepsPerRevolution, 52, 51, 53, 50);
+// Use pin 8-11 on the arduino to IN1-IN4 on the stepper board
+Stepper stepperName = Stepper(stepsPerRevolution, 52, 51, 53, 50);
 
 void setup() {
-  stepper.setSpeed(10); // RPM
+
+  // Set the RPM of the stepper motor
+  stepperName.setSpeed(5);
+
+  // Set the pinMode of our button pin
+  pinMode(buttonPressPin, INPUT_PULLUP);
+
+  // Set our button press Boolean to a known value
+  buttonPressed = true;
 }
 
 void loop() {
-  // 90° clockwise
-  stepper.step(steps90);
-  delay(1000);
-
-  // 180° counter-clockwise
-  stepper.step(-steps180);
-  delay(1000);
-
-  // 90° clockwise
-  stepper.step(steps90);
-  delay(1000);
+    // Checking the state of the button pin
+    buttonPressed = digitalRead(buttonPressPin);
+    // If the button is pressed, step to 90* and reset the button pressing state
+    if (buttonPressed == false) {
+      stepperName.step(stepsPerRevolution / 4);
+      delay(50);
+      buttonPressed = true;
+    }
+    
 }
