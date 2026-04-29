@@ -7,7 +7,8 @@ const int stepsPerRevolution = 2048;
 Stepper stepper(stepsPerRevolution, 8, 10, 9, 11);
 
 // BH1750 setup
-BH1750 lightMeter;
+BH1750 lightMeter1(0x23);  // first sensor
+BH1750 lightMeter2(0x5C);  // second sensor
 
 // Segments
 const int segments[] = { 0, 45, 90, 135, 180, 225, 270, 315, 360 };
@@ -20,26 +21,31 @@ int degreesToSteps(int degrees) {
 
 void setup() {
   Serial.begin(9600);
+  Wire.begin();
 
-  // Stepper speed
   stepper.setSpeed(5);
 
-  // Start BH1750
-  Wire.begin();
-  if (lightMeter.begin()) {
-    Serial.println("BH1750 initialized.");
-  } else {
-    Serial.println("Error initializing BH1750.");
+  if (!lightMeter1.begin(BH1750::CONTINUOUS_HIGH_RES_MODE, 0x23)) {
+    Serial.println("Error initializing BH1750 #1");
+  }
+
+  if (!lightMeter2.begin(BH1750::CONTINUOUS_HIGH_RES_MODE, 0x5C)) {
+    Serial.println("Error initializing BH1750 #2");
   }
 }
 
 void loop() {
-  float lux = lightMeter.readLightLevel(); // Read in lux
-  Serial.print("Light level: ");
-  Serial.println(lux);
+  float lux1 = lightMeter1.readLightLevel();
+  float lux2 = lightMeter2.readLightLevel();
+
+  Serial.print("Light sensor 1: ");
+  Serial.println(lux1);
+  Serial.print("Light sensor 2: ");
+  Serial.println(lux2);
+
+  float lux = (lux1 + lux2) / 2;
 
   int targetSegment = map(lux, 0, 1000, 0, numSegments - 1);
-
   targetSegment = constrain(targetSegment, 0, numSegments - 1);
 
   if (targetSegment != currentSegment) {
@@ -49,7 +55,6 @@ void loop() {
     Serial.print("Rotated: ");
     Serial.print(rotation);
     Serial.println(" degrees");
-
     currentSegment = targetSegment;
   }
 
